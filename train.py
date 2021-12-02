@@ -263,6 +263,10 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
                 )
 
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
 if __name__ == "__main__":
     device = "cuda"
 
@@ -344,6 +348,9 @@ if __name__ == "__main__":
     generator = Generator(args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier).to(device)
     discriminator = Discriminator(args.size, channel_multiplier=args.channel_multiplier).to(device)
     g_ema = Generator(args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier).to(device)
+
+    print(count_parameters(generator))
+    print(count_parameters(discriminator))
     g_ema.eval()
     accumulate(g_ema, generator, 0)
 
