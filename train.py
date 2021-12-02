@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from dataset import MultiResolutionDataset
 from distributed import get_rank, get_world_size, reduce_loss_dict, reduce_sum, synchronize
+from model import Discriminator, Generator
 from op import conv2d_gradfix
 
 
@@ -273,7 +274,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="StyleGAN2 trainer")
 
     parser.add_argument("path", type=str, help="path to the lmdb dataset")
-    parser.add_argument("--arch", type=str, default="stylegan2", help="model architectures (stylegan2 | swagan)")
     parser.add_argument("--iter", type=int, default=800000, help="total training iterations")
     parser.add_argument("--batch", type=int, default=8, help="batch sizes for each gpus")
     parser.add_argument(
@@ -338,12 +338,6 @@ if __name__ == "__main__":
     args.n_mlp = 8
 
     args.start_iter = 0
-
-    if args.arch == "stylegan2":
-        from model import Discriminator, Generator
-
-    elif args.arch == "swagan":
-        from swagan import Discriminator, Generator
 
     generator = Generator(args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier).to(device)
     discriminator = Discriminator(args.size, channel_multiplier=args.channel_multiplier).to(device)
