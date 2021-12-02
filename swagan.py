@@ -1,25 +1,15 @@
-import math
-import random
 import functools
+import math
 import operator
+import random
 
 import torch
 from torch import nn
-from torch.nn import functional as F
 from torch.autograd import Function
+from torch.nn import functional as F
 
-from op import FusedLeakyReLU, fused_leaky_relu, upfirdn2d, conv2d_gradfix
-from model import (
-    ModulatedConv2d,
-    StyledConv,
-    ConstantInput,
-    PixelNorm,
-    Upsample,
-    Downsample,
-    Blur,
-    EqualLinear,
-    ConvLayer,
-)
+from model import Blur, ConstantInput, ConvLayer, Downsample, EqualLinear, ModulatedConv2d, PixelNorm, StyledConv, Upsample
+from op import FusedLeakyReLU, conv2d_gradfix, fused_leaky_relu, upfirdn2d
 
 
 def get_haar_wavelet(in_channels):
@@ -161,11 +151,7 @@ class Generator(nn.Module):
         layers = [PixelNorm()]
 
         for i in range(n_mlp):
-            layers.append(
-                EqualLinear(
-                    style_dim, style_dim, lr_mul=lr_mlp, activation="fused_lrelu"
-                )
-            )
+            layers.append(EqualLinear(style_dim, style_dim, lr_mul=lr_mlp, activation="fused_lrelu"))
 
         self.style = nn.Sequential(*layers)
 
@@ -182,9 +168,7 @@ class Generator(nn.Module):
         }
 
         self.input = ConstantInput(self.channels[4])
-        self.conv1 = StyledConv(
-            self.channels[4], self.channels[4], 3, style_dim, blur_kernel=blur_kernel
-        )
+        self.conv1 = StyledConv(self.channels[4], self.channels[4], 3, style_dim, blur_kernel=blur_kernel)
         self.to_rgb1 = ToRGB(self.channels[4], style_dim, upsample=False)
 
         self.log_size = int(math.log(size, 2)) - 1
@@ -216,11 +200,7 @@ class Generator(nn.Module):
                 )
             )
 
-            self.convs.append(
-                StyledConv(
-                    out_channel, out_channel, 3, style_dim, blur_kernel=blur_kernel
-                )
-            )
+            self.convs.append(StyledConv(out_channel, out_channel, 3, style_dim, blur_kernel=blur_kernel))
 
             self.to_rgbs.append(ToRGB(out_channel, style_dim))
 
@@ -242,9 +222,7 @@ class Generator(nn.Module):
         return noises
 
     def mean_latent(self, n_latent):
-        latent_in = torch.randn(
-            n_latent, self.style_dim, device=self.input.input.device
-        )
+        latent_in = torch.randn(n_latent, self.style_dim, device=self.input.input.device)
         latent = self.style(latent_in).mean(0, keepdim=True)
 
         return latent
@@ -270,17 +248,13 @@ class Generator(nn.Module):
             if randomize_noise:
                 noise = [None] * self.num_layers
             else:
-                noise = [
-                    getattr(self.noises, f"noise_{i}") for i in range(self.num_layers)
-                ]
+                noise = [getattr(self.noises, f"noise_{i}") for i in range(self.num_layers)]
 
         if truncation < 1:
             style_t = []
 
             for style in styles:
-                style_t.append(
-                    truncation_latent + truncation * (style - truncation_latent)
-                )
+                style_t.append(truncation_latent + truncation * (style - truncation_latent))
 
             styles = style_t
 
@@ -308,9 +282,7 @@ class Generator(nn.Module):
         skip = self.to_rgb1(out, latent[:, 1])
 
         i = 1
-        for conv1, conv2, noise1, noise2, to_rgb in zip(
-            self.convs[::2], self.convs[1::2], noise[1::2], noise[2::2], self.to_rgbs
-        ):
+        for conv1, conv2, noise1, noise2, to_rgb in zip(self.convs[::2], self.convs[1::2], noise[1::2], noise[2::2], self.to_rgbs):
             out = conv1(out, latent[:, i], noise=noise1)
             out = conv2(out, latent[:, i + 1], noise=noise2)
             skip = to_rgb(out, latent[:, i + 2], skip)
@@ -423,9 +395,7 @@ class Discriminator(nn.Module):
 
         batch, channel, height, width = out.shape
         group = min(batch, self.stddev_group)
-        stddev = out.view(
-            group, -1, self.stddev_feat, channel // self.stddev_feat, height, width
-        )
+        stddev = out.view(group, -1, self.stddev_feat, channel // self.stddev_feat, height, width)
         stddev = torch.sqrt(stddev.var(0, unbiased=False) + 1e-8)
         stddev = stddev.mean([2, 3, 4], keepdims=True).squeeze(2)
         stddev = stddev.repeat(group, 1, height, width)
@@ -437,4 +407,3 @@ class Discriminator(nn.Module):
         out = self.final_linear(out)
 
         return out
-
