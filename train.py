@@ -264,7 +264,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
 
 
 def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    return sum(p.numel() for p in model.parameters()), sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 if __name__ == "__main__":
