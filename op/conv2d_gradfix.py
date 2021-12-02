@@ -82,12 +82,10 @@ def could_use_op(input):
     if input.device.type != "cuda":
         return False
 
-    if any(torch.__version__.startswith(x) for x in ["1.7.", "1.8."]):
+    if any(torch.__version__.startswith(x) for x in ["1.7.", "1.8.", "1.9.", "1.10."]):
         return True
 
-    warnings.warn(
-        f"conv2d_gradfix not supported on PyTorch {torch.__version__}. Falling back to torch.nn.functional.conv2d()."
-    )
+    warnings.warn(f"conv2d_gradfix not supported on PyTorch {torch.__version__}. Falling back to torch.nn.functional.conv2d().")
 
     return False
 
@@ -101,9 +99,7 @@ def ensure_tuple(xs, ndim):
 conv2d_gradfix_cache = dict()
 
 
-def conv2d_gradfix(
-    transpose, weight_shape, stride, padding, output_padding, dilation, groups
-):
+def conv2d_gradfix(transpose, weight_shape, stride, padding, output_padding, dilation, groups):
     ndim = 2
     weight_shape = tuple(weight_shape)
     stride = ensure_tuple(stride, ndim)
@@ -115,19 +111,14 @@ def conv2d_gradfix(
     if key in conv2d_gradfix_cache:
         return conv2d_gradfix_cache[key]
 
-    common_kwargs = dict(
-        stride=stride, padding=padding, dilation=dilation, groups=groups
-    )
+    common_kwargs = dict(stride=stride, padding=padding, dilation=dilation, groups=groups)
 
     def calc_output_padding(input_shape, output_shape):
         if transpose:
             return [0, 0]
 
         return [
-            input_shape[i + 2]
-            - (output_shape[i + 2] - 1) * stride[i]
-            - (1 - 2 * padding[i])
-            - dilation[i] * (weight_shape[i + 2] - 1)
+            input_shape[i + 2] - (output_shape[i + 2] - 1) * stride[i] - (1 - 2 * padding[i]) - dilation[i] * (weight_shape[i + 2] - 1)
             for i in range(ndim)
         ]
 
@@ -156,9 +147,7 @@ def conv2d_gradfix(
             grad_input, grad_weight, grad_bias = None, None, None
 
             if ctx.needs_input_grad[0]:
-                p = calc_output_padding(
-                    input_shape=input.shape, output_shape=grad_output.shape
-                )
+                p = calc_output_padding(input_shape=input.shape, output_shape=grad_output.shape)
                 grad_input = conv2d_gradfix(
                     transpose=(not transpose),
                     weight_shape=weight_shape,
@@ -178,9 +167,7 @@ def conv2d_gradfix(
         @staticmethod
         def forward(ctx, grad_output, input):
             op = torch._C._jit_get_operation(
-                "aten::cudnn_convolution_backward_weight"
-                if not transpose
-                else "aten::cudnn_convolution_transpose_backward_weight"
+                "aten::cudnn_convolution_backward_weight" if not transpose else "aten::cudnn_convolution_transpose_backward_weight"
             )
             flags = [
                 torch.backends.cudnn.benchmark,
@@ -210,9 +197,7 @@ def conv2d_gradfix(
                 grad_grad_output = Conv2d.apply(input, grad_grad_weight, None)
 
             if ctx.needs_input_grad[1]:
-                p = calc_output_padding(
-                    input_shape=input.shape, output_shape=grad_output.shape
-                )
+                p = calc_output_padding(input_shape=input.shape, output_shape=grad_output.shape)
                 grad_grad_input = conv2d_gradfix(
                     transpose=(not transpose),
                     weight_shape=weight_shape,
