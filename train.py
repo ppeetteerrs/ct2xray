@@ -12,13 +12,6 @@ from torch.utils import data
 from torchvision import transforms, utils
 from tqdm import tqdm
 
-try:
-    import wandb
-
-except ImportError:
-    wandb = None
-
-
 from dataset import MultiResolutionDataset
 from distributed import get_rank, get_world_size, reduce_loss_dict, reduce_sum, synchronize
 from op import conv2d_gradfix
@@ -244,21 +237,6 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
                 )
             )
 
-            if wandb and args.wandb:
-                wandb.log(
-                    {
-                        "Generator": g_loss_val,
-                        "Discriminator": d_loss_val,
-                        "Rt": r_t_stat,
-                        "R1": r1_val,
-                        "Path Length Regularization": path_loss_val,
-                        "Mean Path Length": mean_path_length,
-                        "Real Score": real_score_val,
-                        "Fake Score": fake_score_val,
-                        "Path Length": path_length_val,
-                    }
-                )
-
             if i % 100 == 0:
                 with torch.no_grad():
                     g_ema.eval()
@@ -340,7 +318,6 @@ if __name__ == "__main__":
         default=2,
         help="channel multiplier factor for the model. config-f = 2, else = 1",
     )
-    parser.add_argument("--wandb", action="store_true", help="use weights and biases logging")
     parser.add_argument("--local_rank", type=int, default=0, help="local rank for distributed training")
 
     args = parser.parse_args()
@@ -433,8 +410,5 @@ if __name__ == "__main__":
         sampler=data_sampler(dataset, shuffle=True, distributed=args.distributed),
         drop_last=True,
     )
-
-    if get_rank() == 0 and wandb is not None and args.wandb:
-        wandb.init(project="stylegan 2")
 
     train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, device)
