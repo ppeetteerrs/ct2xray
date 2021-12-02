@@ -5,15 +5,12 @@ from torchvision import utils
 
 from model import Generator
 
-
 if __name__ == "__main__":
     torch.set_grad_enabled(False)
 
     parser = argparse.ArgumentParser(description="Apply closed form factorization")
 
-    parser.add_argument(
-        "-i", "--index", type=int, default=0, help="index of eigenvector"
-    )
+    parser.add_argument("-i", "--index", type=int, default=0, help="index of eigenvector")
     parser.add_argument(
         "-d",
         "--degree",
@@ -25,21 +22,13 @@ if __name__ == "__main__":
         "--channel_multiplier",
         type=int,
         default=2,
-        help='channel multiplier factor. config-f = 2, else = 1',
+        help="channel multiplier factor. config-f = 2, else = 1",
     )
     parser.add_argument("--ckpt", type=str, required=True, help="stylegan2 checkpoints")
-    parser.add_argument(
-        "--size", type=int, default=256, help="output image size of the generator"
-    )
-    parser.add_argument(
-        "-n", "--n_sample", type=int, default=7, help="number of samples created"
-    )
-    parser.add_argument(
-        "--truncation", type=float, default=0.7, help="truncation factor"
-    )
-    parser.add_argument(
-        "--device", type=str, default="cuda", help="device to run the model"
-    )
+    parser.add_argument("--size", type=int, default=256, help="output image size of the generator")
+    parser.add_argument("-n", "--n_sample", type=int, default=7, help="number of samples created")
+    parser.add_argument("--truncation", type=float, default=0.7, help="truncation factor")
+    parser.add_argument("--device", type=str, default="cuda", help="device to run the model")
     parser.add_argument(
         "--out_prefix",
         type=str,
@@ -89,6 +78,6 @@ if __name__ == "__main__":
         torch.cat([img1, img, img2], 0),
         f"{args.out_prefix}_index-{args.index}_degree-{args.degree}.png",
         normalize=True,
-        range=(-1, 1),
+        value_range=(-1, 1),
         nrow=args.n_sample,
     )

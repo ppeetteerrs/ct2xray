@@ -1,14 +1,14 @@
 import argparse
 import math
-import random
 import os
+import random
 
 import numpy as np
 import torch
-from torch import nn, autograd, optim
+import torch.distributed as dist
+from torch import autograd, nn, optim
 from torch.nn import functional as F
 from torch.utils import data
-import torch.distributed as dist
 from torchvision import transforms, utils
 from tqdm import tqdm
 
@@ -20,15 +20,9 @@ except ImportError:
 
 
 from dataset import MultiResolutionDataset
-from distributed import (
-    get_rank,
-    synchronize,
-    reduce_loss_dict,
-    reduce_sum,
-    get_world_size,
-)
+from distributed import get_rank, get_world_size, reduce_loss_dict, reduce_sum, synchronize
+from non_leaking import AdaptiveAugment, augment
 from op import conv2d_gradfix
-from non_leaking import augment, AdaptiveAugment
 
 
 def data_sampler(dataset, shuffle, distributed):
@@ -70,9 +64,7 @@ def d_logistic_loss(real_pred, fake_pred):
 
 def d_r1_loss(real_pred, real_img):
     with conv2d_gradfix.no_weight_gradients():
-        grad_real, = autograd.grad(
-            outputs=real_pred.sum(), inputs=real_img, create_graph=True
-        )
+        (grad_real,) = autograd.grad(outputs=real_pred.sum(), inputs=real_img, create_graph=True)
     grad_penalty = grad_real.pow(2).reshape(grad_real.shape[0], -1).sum(1).mean()
 
     return grad_penalty
@@ -85,12 +77,8 @@ def g_nonsaturating_loss(fake_pred):
 
 
 def g_path_regularize(fake_img, latents, mean_path_length, decay=0.01):
-    noise = torch.randn_like(fake_img) / math.sqrt(
-        fake_img.shape[2] * fake_img.shape[3]
-    )
-    grad, = autograd.grad(
-        outputs=(fake_img * noise).sum(), inputs=latents, create_graph=True
-    )
+    noise = torch.randn_like(fake_img) / math.sqrt(fake_img.shape[2] * fake_img.shape[3])
+    (grad,) = autograd.grad(outputs=(fake_img * noise).sum(), inputs=latents, create_graph=True)
     path_lengths = torch.sqrt(grad.pow(2).sum(2).mean(1))
 
     path_mean = mean_path_length + decay * (path_lengths.mean() - mean_path_length)
@@ -244,9 +232,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
             noise = mixing_noise(path_batch_size, args.latent, args.mixing, device)
             fake_img, latents = generator(noise, return_latents=True)
 
-            path_loss, mean_path_length, path_lengths = g_path_regularize(
-                fake_img, latents, mean_path_length
-            )
+            path_loss, mean_path_length, path_lengths = g_path_regularize(fake_img, latents, mean_path_length)
 
             generator.zero_grad()
             weighted_path_loss = args.path_regularize * args.g_reg_every * path_loss
@@ -258,9 +244,7 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
 
             g_optim.step()
 
-            mean_path_length_avg = (
-                reduce_sum(mean_path_length).item() / get_world_size()
-            )
+            mean_path_length_avg = reduce_sum(mean_path_length).item() / get_world_size()
 
         loss_dict["path"] = path_loss
         loss_dict["path_length"] = path_lengths.mean()
@@ -311,10 +295,10 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
                         f"sample/{str(i).zfill(6)}.png",
                         nrow=int(args.n_sample ** 0.5),
                         normalize=True,
-                        range=(-1, 1),
+                        value_range=(-1, 1),
                     )
 
-            if i % 10000 == 0:
+            if i % 2000 == 0:
                 torch.save(
                     {
                         "g": g_module.state_dict(),
@@ -335,25 +319,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="StyleGAN2 trainer")
 
     parser.add_argument("path", type=str, help="path to the lmdb dataset")
-    parser.add_argument('--arch', type=str, default='stylegan2', help='model architectures (stylegan2 | swagan)')
-    parser.add_argument(
-        "--iter", type=int, default=800000, help="total training iterations"
-    )
-    parser.add_argument(
-        "--batch", type=int, default=16, help="batch sizes for each gpus"
-    )
+    parser.add_argument("--arch", type=str, default="stylegan2", help="model architectures (stylegan2 | swagan)")
+    parser.add_argument("--iter", type=int, default=800000, help="total training iterations")
+    parser.add_argument("--batch", type=int, default=16, help="batch sizes for each gpus")
     parser.add_argument(
         "--n_sample",
         type=int,
         default=64,
         help="number of the samples generated during training",
     )
-    parser.add_argument(
-        "--size", type=int, default=256, help="image sizes for the model"
-    )
-    parser.add_argument(
-        "--r1", type=float, default=10, help="weight of the r1 regularization"
-    )
+    parser.add_argument("--size", type=int, default=256, help="image sizes for the model")
+    parser.add_argument("--r1", type=float, default=10, help="weight of the r1 regularization")
     parser.add_argument(
         "--path_regularize",
         type=float,
@@ -378,9 +354,7 @@ if __name__ == "__main__":
         default=4,
         help="interval of the applying path length regularization",
     )
-    parser.add_argument(
-        "--mixing", type=float, default=0.9, help="probability of latent code mixing"
-    )
+    parser.add_argument("--mixing", type=float, default=0.9, help="probability of latent code mixing")
     parser.add_argument(
         "--ckpt",
         type=str,
@@ -394,15 +368,9 @@ if __name__ == "__main__":
         default=2,
         help="channel multiplier factor for the model. config-f = 2, else = 1",
     )
-    parser.add_argument(
-        "--wandb", action="store_true", help="use weights and biases logging"
-    )
-    parser.add_argument(
-        "--local_rank", type=int, default=0, help="local rank for distributed training"
-    )
-    parser.add_argument(
-        "--augment", action="store_true", help="apply non leaking augmentation"
-    )
+    parser.add_argument("--wandb", action="store_true", help="use weights and biases logging")
+    parser.add_argument("--local_rank", type=int, default=0, help="local rank for distributed training")
+    parser.add_argument("--augment", action="store_true", help="apply non leaking augmentation")
     parser.add_argument(
         "--augment_p",
         type=float,
@@ -443,21 +411,15 @@ if __name__ == "__main__":
 
     args.start_iter = 0
 
-    if args.arch == 'stylegan2':
-        from model import Generator, Discriminator
+    if args.arch == "stylegan2":
+        from model import Discriminator, Generator
 
-    elif args.arch == 'swagan':
-        from swagan import Generator, Discriminator
+    elif args.arch == "swagan":
+        from swagan import Discriminator, Generator
 
-    generator = Generator(
-        args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier
-    ).to(device)
-    discriminator = Discriminator(
-        args.size, channel_multiplier=args.channel_multiplier
-    ).to(device)
-    g_ema = Generator(
-        args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier
-    ).to(device)
+    generator = Generator(args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier).to(device)
+    discriminator = Discriminator(args.size, channel_multiplier=args.channel_multiplier).to(device)
+    g_ema = Generator(args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier).to(device)
     g_ema.eval()
     accumulate(g_ema, generator, 0)
 
