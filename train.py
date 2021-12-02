@@ -141,6 +141,8 @@ def train(args, loader, generator, discriminator, g_optim, d_optim, g_ema, devic
     ada_aug_p = args.augment_p if args.augment_p > 0 else 0.0
     r_t_stat = 0
 
+    print(args.augment)
+
     if args.augment and args.augment_p == 0:
         ada_augment = AdaptiveAugment(args.ada_target, args.ada_length, 8, device)
 
