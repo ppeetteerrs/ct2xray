@@ -275,7 +275,7 @@ if __name__ == "__main__":
     parser.add_argument("path", type=str, help="path to the lmdb dataset")
     parser.add_argument("--arch", type=str, default="stylegan2", help="model architectures (stylegan2 | swagan)")
     parser.add_argument("--iter", type=int, default=800000, help="total training iterations")
-    parser.add_argument("--batch", type=int, default=16, help="batch sizes for each gpus")
+    parser.add_argument("--batch", type=int, default=8, help="batch sizes for each gpus")
     parser.add_argument(
         "--n_sample",
         type=int,
