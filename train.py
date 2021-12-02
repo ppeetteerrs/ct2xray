@@ -279,10 +279,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_sample",
         type=int,
-        default=64,
+        default=8,
         help="number of the samples generated during training",
     )
-    parser.add_argument("--size", type=int, default=256, help="image sizes for the model")
+    parser.add_argument("--size", type=int, default=1024, help="image sizes for the model")
     parser.add_argument("--r1", type=float, default=10, help="weight of the r1 regularization")
     parser.add_argument(
         "--path_regularize",
@@ -349,8 +349,8 @@ if __name__ == "__main__":
     discriminator = Discriminator(args.size, channel_multiplier=args.channel_multiplier).to(device)
     g_ema = Generator(args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier).to(device)
 
-    print(count_parameters(generator))
-    print(count_parameters(discriminator))
+    print("No. Params in Generator (All, Trainable):", *count_parameters(generator))
+    print("No. Params in Discriminator (All, Trainable):", *count_parameters(discriminator))
     g_ema.eval()
     accumulate(g_ema, generator, 0)
 
