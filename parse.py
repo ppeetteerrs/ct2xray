@@ -1,32 +1,59 @@
 from glob import glob
+from random import sample
 
+import cv2 as cv
 import numpy as np
-from opencxr import load
-from opencxr.algorithms import cxr_standardize
-from opencxr.utils.file_io import write_file
-from PIL import Image
-from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map
 
-files = glob("chexpert/train/patient*/study*/*_frontal.jpg")[:10]
+files = glob("chexpert/train/patient*/study*/*_frontal.jpg")
+files = sample(files, 100)
 print(f"{len(files)} frontal CXR found.")
-algo = load(cxr_standardize)
 
 
-def new_filename(img_path: str) -> str:
+def get_filename(img_path: str) -> str:
     patient_no = img_path.split("/patient")[1].split("/")[0]
     study_no = img_path.split("/study")[1].split("/")[0]
     view_no = img_path.split("/view")[1].split("_")[0]
     return f"chexpert_std/{patient_no}_{study_no}_{view_no}.png"
 
 
-def standardize(img_path: str) -> None:
-    img = np.array(Image.open(img_path)).transpose()
-    std_img, new_spacing, _ = algo.run(img, (1.0, 1.0))
-    new_name = new_filename(img_path)
-    write_file(new_name, std_img, new_spacing)
+def read_img(img_path: str) -> np.ndarray:
+    img = cv.imread(img_path)
+    return cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
 
-# res = process_map(standardize, files, max_workers=1)
+def remove_border(img: np.ndarray, tol=100) -> np.ndarray:
+    mask = img > tol
+    m, n = img.shape
+    mask0, mask1 = mask.any(0), mask.any(1)
+    col_start, col_end = mask0.argmax(), n - mask0[::-1].argmax()
+    row_start, row_end = mask1.argmax(), m - mask1[::-1].argmax()
+    return img[row_start:row_end, col_start:col_end]
 
-for file in tqdm(files):
-    standardize(file)
+
+def center_crop(img: np.ndarray) -> np.ndarray:
+    x, y = img.shape
+    dim = min(x, y)
+
+    x_start = (x - dim) // 2
+    y_start = (y - dim) // 2
+
+    return img[x_start: x_start + dim, y_start: y_start + dim]
+
+
+def process(img_path: str) -> str:
+    img = read_img(img_path)
+    img = remove_border(img)
+    img = center_crop(img)
+    img = cv.equalizeHist(img)
+    img = cv.resize(img, (1024, 1024))
+    if np.mean(img) < 50:
+        return img_path
+    else:
+        cv.imwrite(get_filename(img_path), img)
+        return "ok"
+
+
+results = process_map(process, files, max_workers=8)
+okayed = sum([1 for item in results if item == "ok"])
+print(f"{okayed}/{len(files)} images processed.")
