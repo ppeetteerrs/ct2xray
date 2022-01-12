@@ -13,7 +13,8 @@ from torchvision import transforms, utils
 from tqdm import tqdm
 
 from dataset import MultiResolutionDataset
-from distributed import get_rank, get_world_size, reduce_loss_dict, reduce_sum, synchronize
+from distributed import (get_rank, get_world_size, reduce_loss_dict,
+                         reduce_sum, synchronize)
 from model import Discriminator, Generator
 from op import conv2d_gradfix
 
@@ -279,7 +280,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_sample",
         type=int,
-        default=8,
+        default=32,
         help="number of the samples generated during training",
     )
     parser.add_argument("--size", type=int, default=1024, help="image sizes for the model")
@@ -341,6 +342,9 @@ if __name__ == "__main__":
 
     generator = Generator(args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier).to(device)
     discriminator = Discriminator(args.size, channel_multiplier=args.channel_multiplier).to(device)
+    # print(generator)
+    # print(discriminator)
+    # exit(1)
     g_ema = Generator(args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier).to(device)
 
     print("No. Params in Generator (All, Trainable):", *count_parameters(generator))

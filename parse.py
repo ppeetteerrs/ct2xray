@@ -1,20 +1,26 @@
 from glob import glob
+from os import environ
+from pathlib import Path
 from random import sample
 
 import cv2 as cv
 import numpy as np
 from tqdm.contrib.concurrent import process_map
 
-files = glob("chexpert/train/patient*/study*/*_frontal.jpg")
-files = sample(files, 100)
+output_dir = (Path(environ["DATA"]) / "chexpert_std")
+output_dir.mkdir(exist_ok=True, parents=True)
+
+files = glob("chexpert/train/patient*/study*/view1_frontal.jpg")
+files = sample(files, 70000)
 print(f"{len(files)} frontal CXR found.")
+print(f"Saving outputs to {output_dir}")
 
 
 def get_filename(img_path: str) -> str:
     patient_no = img_path.split("/patient")[1].split("/")[0]
     study_no = img_path.split("/study")[1].split("/")[0]
     view_no = img_path.split("/view")[1].split("_")[0]
-    return f"chexpert_std/{patient_no}_{study_no}_{view_no}.png"
+    return f"{output_dir}/{patient_no}_{study_no}_{view_no}.png"
 
 
 def read_img(img_path: str) -> np.ndarray:
@@ -54,6 +60,6 @@ def process(img_path: str) -> str:
         return "ok"
 
 
-results = process_map(process, files, max_workers=8)
+results = process_map(process, files, max_workers=4, chunksize=1)
 okayed = sum([1 for item in results if item == "ok"])
 print(f"{okayed}/{len(files)} images processed.")

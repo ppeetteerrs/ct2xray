@@ -14,12 +14,14 @@ def generate(args, g_ema, device, mean_latent):
         for i in tqdm(range(args.pics)):
             sample_z = torch.randn(args.sample, args.latent, device=device)
 
-            sample, _ = g_ema([sample_z], truncation=args.truncation, truncation_latent=mean_latent)
+            sample, _ = g_ema(
+                [sample_z], truncation=args.truncation, truncation_latent=mean_latent
+            )
 
             utils.save_image(
                 sample,
-                f"sample/{str(i).zfill(6)}.png",
-                nrow=1,
+                f"generated/{str(i).zfill(6)}.png",
+                nrow=int(args.sample ** 0.5),
                 normalize=True,
                 value_range=(-1, 1),
             )
@@ -30,14 +32,18 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Generate samples from the generator")
 
-    parser.add_argument("--size", type=int, default=1024, help="output image size of the generator")
+    parser.add_argument(
+        "--size", type=int, default=1024, help="output image size of the generator"
+    )
     parser.add_argument(
         "--sample",
         type=int,
-        default=1,
+        default=49,
         help="number of samples to be generated for each image",
     )
-    parser.add_argument("--pics", type=int, default=20, help="number of images to be generated")
+    parser.add_argument(
+        "--pics", type=int, default=10, help="number of images to be generated"
+    )
     parser.add_argument("--truncation", type=float, default=1, help="truncation ratio")
     parser.add_argument(
         "--truncation_mean",
@@ -63,7 +69,9 @@ if __name__ == "__main__":
     args.latent = 512
     args.n_mlp = 8
 
-    g_ema = Generator(args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier).to(device)
+    g_ema = Generator(
+        args.size, args.latent, args.n_mlp, channel_multiplier=args.channel_multiplier
+    ).to(device)
     checkpoint = torch.load(args.ckpt)
 
     g_ema.load_state_dict(checkpoint["g_ema"])

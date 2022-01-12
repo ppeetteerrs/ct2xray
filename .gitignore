@@ -133,3 +133,7 @@ wandb/
 *.pkl
 
 chexpert*
+results
+checkpoint
+animation
+generated
